@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Available Rides - CabMate</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="container header-flex">
+            <h1>CabMate</h1>
+            <nav aria-label="Main navigation">
+                <ul class="nav-list">
+                    <li><a href="dashboard.html">Dashboard</a></li>
+                    <li><a href="profile.html">Profile</a></li>
+                    <li><a href="login.html">Logout</a></li>
+                </ul>
+            </nav>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </header>
+    <main>
+        <div class="dashboard-container">
+            <section class="hero" style="margin-bottom: 24px;">
+                <h2>Available Rides</h2>
+                <p>Browse and join rides created by other users.</p>
+            </section>
+            <section class="features" style="flex-direction:column;width:100%;">
+                <div class="feature" style="width:100%;">
+                    <!-- Add this filter UI just above #availableRidesList -->
+                    <div style="margin-bottom:18px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+                        <input type="text" id="filterFrom" placeholder="From" style="padding:7px 12px;border-radius:6px;border:1px solid #d1d5db;min-width:120px;">
+                        <input type="text" id="filterTo" placeholder="To" style="padding:7px 12px;border-radius:6px;border:1px solid #d1d5db;min-width:120px;">
+                        <input type="date" id="filterDate" style="padding:7px 12px;border-radius:6px;border:1px solid #d1d5db;">
+                        <button id="clearFilters" style="padding:7px 18px;border-radius:6px;background:#e5e7eb;color:#222;border:none;">Clear</button>
+                    </div>
+                    <div id="availableRidesList">
+                        <!-- Available rides will be listed here -->
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 CabMate. All rights reserved.</p>
+        </div>
+    </footer>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Hamburger menu functionality
+        var hamburger = document.querySelector('.hamburger');
+        var navList = document.querySelector('.nav-list');
+        if (hamburger && navList) {
+            hamburger.addEventListener('click', function() {
+                navList.classList.toggle('open');
+                hamburger.classList.toggle('open');
+                hamburger.setAttribute('aria-expanded', navList.classList.contains('open'));
+            });
+        }
+
+        // Fetch user info
+        const user = JSON.parse(localStorage.getItem('cabshareUser')) || {};
+        // CHANGE THIS LINE: Use user.regno for the current logged-in user
+        const loggedInUserIdentifier = user.regno || "Guest"; 
+
+        // Global variable to hold fetched rides
+        let rides = [];
+
+        // Filter variables
+        let filterFrom = '';
+        let filterTo = '';
+        let filterDate = '';
+
+        // Function to fetch rides from backend and render
+        async function fetchAndRenderAvailableRides() {
+            const availableRidesList = document.getElementById('availableRidesList');
+            if (!availableRidesList) return; // Defensive check
+
+            // Display loading message
+            availableRidesList.innerHTML = "<p>Loading available rides...</p>";
+
+            try {
+                // Fetch ALL rides from your backend
+                const response = await fetch('https://cabmate-backend.onrender.com/api/rides');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                rides = await response.json(); // Store fetched rides in the 'rides' array
+
+                // Now render them, applying filters and excluding user's own rides
+                renderAvailableRides(rides);
+
+            } catch (error) {
+                console.error('Error fetching available rides:', error);
+                availableRidesList.innerHTML = `<p style="color:red;">Error loading available rides: ${error.message}</p>`;
+            }
+        }
+
+        // Add this helper function above renderAvailableRides
+        function formatTime12h(time24) {
+            if (!time24) return 'N/A';
+            const [hourStr, minuteStr] = time24.split(':');
+            let hour = parseInt(hourStr, 10);
+            const minute = minuteStr || '00';
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            hour = hour % 12;
+            if (hour === 0) hour = 12;
+            return `${hour}:${minute.padStart(2, '0')} ${ampm}`;
+        }
+
+        // Update renderAvailableRides
+        function renderAvailableRides(rides) {
+            const availableRidesList = document.getElementById('availableRidesList');
+            // Apply filters
+            const filtered = rides.filter(ride => {
+                const availableSeats = ride.seats - (ride.joined ? ride.joined.length : 0);
+                if (ride.owner === loggedInUserIdentifier) return false;
+                if (availableSeats <= 0) return false; // Hide full rides
+                if (filterFrom && !ride.from.toLowerCase().includes(filterFrom.toLowerCase())) return false;
+                if (filterTo && !ride.to.toLowerCase().includes(filterTo.toLowerCase())) return false;
+                if (filterDate && ride.date !== filterDate) return false;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                availableRidesList.innerHTML = `<div style="padding:24px;text-align:center;color:#888;">No rides found matching your criteria.</div>`;
+                return;
+            }
+
+            availableRidesList.innerHTML = filtered.map(ride => {
+                const alreadyRequested = ride.pendingRequests && ride.pendingRequests.includes(loggedInUserIdentifier);
+                const alreadyJoined = ride.joined && ride.joined.includes(loggedInUserIdentifier);
+                const isOwner = ride.owner === loggedInUserIdentifier;
+                const availableSeats = ride.seats - (ride.joined ? ride.joined.length : 0);
+
+                let actionBtn = '';
+                if (!alreadyJoined && !alreadyRequested && !isOwner && availableSeats > 0) {
+                    actionBtn = `<button class="request-join-btn cta-btn" data-ride-id="${ride._id}">Request to Join</button>`;
+                } else if (alreadyRequested) {
+                    actionBtn = `<span class="status-chip pending">Request Pending</span>`;
+                } else if (alreadyJoined) {
+                    actionBtn = `<span class="status-chip joined">Already Joined</span>`;
+                } else if (isOwner) {
+                    actionBtn = `<span class="status-chip owner">Your Ride</span>`;
+                }
+
+                return `
+                    <div class="ride-card" style="margin-bottom:18px;padding:18px 22px;border-radius:12px;box-shadow:0 2px 8px #0001;background:#fff;">
+                        <div style="font-size:1.1em;margin-bottom:6px;"><b>${ride.from}</b> <span style="color:#888;">→</span> <b>${ride.to}</b></div>
+                        <div style="color:#555;margin-bottom:6px;">Date: <b>${ride.date}</b> | Time: <b>${formatTime12h(ride.time) || 'N/A'}</b></div>
+                        <div style="color:#555;margin-bottom:6px;">
+                            Owner:
+                            <a href="profile.html?regno=${encodeURIComponent(ride.owner)}"
+                               class="joined-member-link"
+                               style="flex:1;color:#0369a1;background:#e0f2fe;padding:3px 10px;border-radius:12px;font-size:0.97em;text-decoration:none;transition:background 0.18s;">
+                                ${ride.owner}
+                            </a>
+                        </div>
+                        <div style="margin-bottom:10px;">Seats left: <b>${availableSeats}</b></div>
+                        <div>${actionBtn}</div>
+                    </div>
+                `;
+            }).join('');
+
+            document.querySelectorAll('.request-join-btn').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    const rideId = this.getAttribute('data-ride-id');
+                    try {
+                        const response = await fetch(`https://cabmate-backend.onrender.com/api/rides/${rideId}/request`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ regno: loggedInUserIdentifier })
+                        });
+                        const result = await response.json();
+                        if (response.ok) {
+                            alert('Request sent!');
+                            fetchAndRenderAvailableRides();
+                        } else {
+                            alert(result.message || 'Failed to send request.');
+                        }
+                    } catch (error) {
+                        alert('Error sending request. Please check your connection or contact support.');
+                    }
+                });
+            });
+        }
+
+        // Filter functionality
+        document.getElementById('filterFrom').addEventListener('input', function() {
+            filterFrom = this.value;
+            renderAvailableRides(rides);
+        });
+        document.getElementById('filterTo').addEventListener('input', function() {
+            filterTo = this.value;
+            // REMOVED: renderTo = this.value; // This was the previous error line
+            renderAvailableRides(rides);
+        });
+        document.getElementById('filterDate').addEventListener('input', function() {
+            filterDate = this.value;
+            renderAvailableRides(rides);
+        });
+        document.getElementById('clearFilters').addEventListener('click', function() {
+            filterFrom = '';
+            filterTo = '';
+            filterDate = '';
+            document.getElementById('filterFrom').value = '';
+            document.getElementById('filterTo').value = '';
+            document.getElementById('filterDate').value = '';
+            renderAvailableRides(rides);
+        });
+
+        // Initial call to fetch and render rides when the page loads
+        fetchAndRenderAvailableRides();
+    });
+</script>
+</body>
+</html>

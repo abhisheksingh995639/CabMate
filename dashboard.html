@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - CabMate</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="container header-flex">
+            <h1>CabMate</h1>
+            <nav aria-label="Main navigation">
+                <ul class="nav-list">
+                    <li><a href="dashboard.html" aria-current="page">Dashboard</a></li>
+                    <li><a href="profile.html">Profile</a></li>
+                    <li><a href="login.html">Logout</a></li>
+                </ul>
+            </nav>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </header>
+    <main>
+        <section class="hero" style="margin-bottom: 24px;">
+            <h2>Welcome to Your Dashboard</h2>
+            <p>Find a ride, share your cab, or join an existing ride below.</p>
+        </section>
+        <div class="dashboard-container">
+            <div class="dashboard-actions" style="display:flex;gap:16px;justify-content:center;margin-bottom:24px;">
+                <button onclick="location.href='create-ride.html';" class="cta-btn animated-btn">
+                    Create Ride
+                </button>
+                <button onclick="location.href='available-rides.html';" class="cta-btn secondary animated-btn">
+                    Join Ride
+                </button>
+            </div>
+            <section class="features" style="flex-direction:column;width:100%;">
+                <div class="feature" style="width:100%;">
+                    <h3>Your Rides</h3>
+                    <div id="yourRidesList">
+                        </div>
+                </div>
+            </section>
+            <section class="features" style="flex-direction:column;width:100%;margin-top:32px;">
+                <div class="feature" style="width:100%;">
+                    <h3>Joined Rides</h3>
+                    <div id="joinedRidesList">
+                        </div>
+                </div>
+            </section>
+        </div>
+    </main>
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 CabMate. All rights reserved.</p>
+        </div>
+    </footer>
+    <div id="chatModal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);z-index:1000;align-items:center;justify-content:center;">
+        <div style="background:#fff;padding:24px 18px 12px 18px;border-radius:12px;max-width:400px;width:95vw;box-shadow:0 8px 32px rgba(0,0,0,0.18);position:relative;">
+            <button id="closeChat" style="position:absolute;top:8px;right:12px;background:none;border:none;font-size:1.3rem;cursor:pointer;">&times;</button>
+            <h3 id="chatTitle" style="margin-bottom:10px;">Ride Chat</h3>
+            <div id="chatMessages" style="height:180px;overflow-y:auto;background:#f3f6fa;border-radius:8px;padding:8px 6px 8px 8px;margin-bottom:10px;font-size:0.98rem;"></div>
+            <form id="chatForm" style="display:flex;gap:6px;">
+                <input id="chatInput" type="text" placeholder="Type a message..." style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid #d1d5db;">
+                <button type="submit" style="padding:7px 18px;border-radius:6px;background:var(--accent,#0ea5e9);color:#fff;border:none;">Send</button>
+            </form>
+        </div>
+    </div>
+    <script src="script.js"></script>
+
+<script>
+    function formatTime12h(time24) {
+        if (!time24) return 'N/A';
+        const [hourStr, minuteStr] = time24.split(':');
+        let hour = parseInt(hourStr, 10);
+        const minute = minuteStr || '00';
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        hour = hour % 12;
+        if (hour === 0) hour = 12;
+        return `${hour}:${minute.padStart(2, '0')} ${ampm}`;
+    }
+
+    let allRides = [];
+    const user = JSON.parse(localStorage.getItem('cabshareUser')) || {};
+    const userName = user.regno || "Guest"; 
+
+    document.addEventListener('DOMContentLoaded', async function() {
+        const myRidesList = document.getElementById('yourRidesList');
+        const joinedRidesList = document.getElementById('joinedRidesList');
+
+        if (!userName || userName === "Guest") {
+            if (myRidesList) myRidesList.innerHTML = '<p>Please log in to view your rides.</p>';
+            if (joinedRidesList) joinedRidesList.innerHTML = '<p>Please log in to view joined rides.</p>';
+            return;
+        }
+
+        if (myRidesList) {
+            try {
+                const response = await fetch(`https://cabmate-backend.onrender.com/api/rides/my?owner=${userName}`);
+                if (response.ok) {
+                    const yourRides = await response.json();
+                    renderYourRides(yourRides);
+                } else {
+                    myRidesList.innerHTML = `<p>Error loading your rides: ${response.statusText}</p>`;
+                    console.error('Failed to fetch your rides:', await response.text());
+                }
+            } catch (error) {
+                myRidesList.innerHTML = `<p>An error occurred while fetching your rides: ${error.message}</p>`;
+                console.error('Fetch error for your rides:', error);
+            }
+        }
+
+        if (joinedRidesList) {
+            try {
+                const response = await fetch(`https://cabmate-backend.onrender.com/api/rides`);
+                if (response.ok) {
+                    allRides = await response.json();
+                    renderJoinedRides();
+                } else {
+                    joinedRidesList.innerHTML = `<p>Error loading joined rides: ${response.statusText}</p>`;
+                    console.error('Failed to fetch all rides for joined list:', await response.text());
+                }
+            } catch (error) {
+                joinedRidesList.innerHTML = `<p>An error occurred while fetching joined rides: ${error.message}</p>`;
+                console.error('Fetch error for joined rides:', error);
+            }
+        }
+    });
+
+    function renderYourRides(yourRides) {
+        const yourRidesList = document.getElementById('yourRidesList');
+        if (!yourRidesList) return;
+
+        if (yourRides.length === 0) {
+            yourRidesList.innerHTML = "<p>You haven't created any rides yet.</p>";
+            return;
+        }
+        yourRidesList.innerHTML = yourRides.map(ride => `
+            <div class="ride-card">
+                <div class="ride-info">
+                    <strong>${ride.from}</strong> &rarr; <strong>${ride.to}</strong>
+                    <span>on ${ride.date}</span> |
+                    <span>Time: ${formatTime12h(ride.time)}</span> |
+                    <span>Seats: ${ride.seats}</span>
+                </div>
+                ${ride.notes ? `<div class="ride-notes" style="margin-top:6px;color:#0369a1;font-size:0.97em;"><b>Notes:</b> ${ride.notes}</div>` : ""}
+                <p><strong>Joined:</strong> ${
+                    (ride.joined && ride.joined.length > 0)
+                    ? ride.joined.map(regno => `
+                        <a href="profile.html?regno=${encodeURIComponent(regno)}"
+                           class="joined-member-link"
+                           style="flex:1;color:#0369a1;background:#e0f2fe;padding:3px 10px;border-radius:12px;font-size:0.97em;text-decoration:none;transition:background 0.18s;">
+                            ${regno}
+                        </a>
+                    `).join('')
+                    : 'None'
+                }</p>
+                <button class="open-your-ride-chat-btn cta-btn secondary animated-btn" data-ride-id="${ride._id}">Open Chat</button>
+                ${ride.owner === userName && ride.pendingRequests && ride.pendingRequests.length > 0 ? `
+                    <div class="pending-requests" style="margin-top:10px;">
+                        <strong>Pending Requests:</strong>
+                        ${ride.pendingRequests.map(regno => `
+                            <div class="request-item" style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+                                <a href="profile.html?regno=${encodeURIComponent(regno)}"
+                                   class="joined-member-link"
+                                   style="flex:1;color:#0369a1;background:#e0f2fe;padding:3px 10px;border-radius:12px;font-size:0.97em;text-decoration:none;transition:background 0.18s;">
+                                    ${regno}
+                                </a>
+                                <button class="approve-request-btn cta-btn success" data-ride-id="${ride._id}" data-regno="${regno}">Approve</button>
+                                <button class="reject-request-btn cta-btn danger" data-ride-id="${ride._id}" data-regno="${regno}">Reject</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+                <button class="delete-ride-btn cta-btn danger animated-btn" data-ride-id="${ride._id}" style="margin-top:10px;">Delete Ride</button>
+            </div>
+        `).join('');
+
+        document.querySelectorAll('.open-your-ride-chat-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const rideId = this.getAttribute('data-ride-id');
+                const ride = yourRides.find(r => r._id === rideId);
+                if (ride) {
+                    openChatModal(ride);
+                }
+            });
+        });
+
+        document.querySelectorAll('.approve-request-btn').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const rideId = this.getAttribute('data-ride-id');
+                const regno = this.getAttribute('data-regno');
+                await handleRequest(rideId, regno, 'approve');
+            });
+        });
+
+        document.querySelectorAll('.reject-request-btn').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const rideId = this.getAttribute('data-ride-id');
+                const regno = this.getAttribute('data-regno');
+                await handleRequest(rideId, regno, 'reject');
+            });
+        });
+
+        // --- Add this for Delete Ride functionality ---
+        document.querySelectorAll('.delete-ride-btn').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const rideId = this.getAttribute('data-ride-id');
+                if (!confirm('Are you sure you want to delete this ride? This cannot be undone.')) return;
+                try {
+                    const response = await fetch(`https://cabmate-backend.onrender.com/api/rides/${rideId}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    if (response.ok) {
+                        alert('Ride deleted successfully.');
+                        // Refresh your rides list
+                        const allYourRides = await (await fetch(`https://cabmate-backend.onrender.com/api/rides/my?owner=${userName}`)).json();
+                        renderYourRides(allYourRides);
+                    } else {
+                        const err = await response.json();
+                        alert('Failed to delete ride: ' + (err.message || response.statusText));
+                    }
+                } catch (error) {
+                    alert('An error occurred while deleting the ride.');
+                    console.error('Delete ride error:', error);
+                }
+            });
+        });
+    }
+
+    async function renderJoinedRides() {
+        const joinedRidesList = document.getElementById('joinedRidesList');
+        if (!joinedRidesList) return;
+
+        const joinedRides = allRides.filter(ride => 
+            Array.isArray(ride.joined) && ride.joined.includes(userName) && ride.owner !== userName
+        );
+
+        if (!joinedRides.length) {
+            joinedRidesList.innerHTML = "<p>You haven't joined any rides yet.</p>";
+            return;
+        }
+
+        joinedRidesList.innerHTML = joinedRides.map(ride => `
+            <div class="ride-card">
+                <div class="ride-info">
+                    <strong>${ride.from}</strong> &rarr; <strong>${ride.to}</strong>
+                    <span>on ${ride.date}</span> |
+                    <span>at ${formatTime12h(ride.time) || "N/A"}</span> |
+                    <span>Seats left: ${ride.seats - ride.joined.length}</span>
+                    <span class="ride-owner">by
+                        <a href="profile.html?regno=${encodeURIComponent(ride.owner)}"
+                           class="owner-link"
+                           style="color:var(--accent-dark,#0369a1);text-decoration:underline;">
+                            ${ride.owner}
+                        </a>
+                    </span>
+                </div>
+                <div class="joined-members" style="margin:8px 0 0 0;">
+                    <span style="font-weight:600;color:var(--accent-dark,#0369a1);font-size:0.97rem;">Joined Members:</span>
+                    <span class="joined-list">${
+                        (ride.joined && ride.joined.length)
+                        ? ride.joined.map(regno => `
+                            <a href="profile.html?regno=${encodeURIComponent(regno)}"
+                               class="joined-member-link"
+                               style="margin-right:8px;background:#e0f2fe;padding:3px 10px;border-radius:12px;font-size:0.97em;color:#0369a1;text-decoration:none;transition:background 0.18s;">
+                                ${regno}
+                            </a>
+                        `).join('')
+                        : '<span style="color:#888;">None yet</span>'
+                    }</span>
+                </div>
+                <div style="display:flex;gap:10px;">
+                    <button class="join-chat-btn cta-btn secondary animated-btn" data-ride-id="${ride._id}">Open Chat</button>
+                    <button class="leave-group-btn cta-btn danger animated-btn" data-ride-id="${ride._id}">Leave Group</button>
+                </div>
+            </div>
+        `).join('');
+
+        document.querySelectorAll('.join-chat-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const rideId = this.getAttribute('data-ride-id');
+                const ride = allRides.find(r => r._id === rideId);
+                if (ride) openChatModal(ride);
+            });
+        });
+
+        document.querySelectorAll('.leave-group-btn').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const rideId = this.getAttribute('data-ride-id');
+                const confirmLeave = confirm("Are you sure you want to leave this ride?");
+                if (!confirmLeave) return;
+
+                try {
+                    const response = await fetch(`https://cabmate-backend.onrender.com/api/rides/${rideId}/leave`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ userName: userName })
+                    });
+
+                    if (response.ok) {
+                        alert("Successfully left the ride!");
+                        const fetchAllRidesResponse = await fetch(`https://cabmate-backend.onrender.com/api/rides`);
+                        if (fetchAllRidesResponse.ok) {
+                            allRides = await fetchAllRidesResponse.json();
+                            renderJoinedRides();
+                        } else {
+                            console.error('Failed to re-fetch rides after leaving:', await fetchAllRidesResponse.text());
+                        }
+                    } else {
+                        const errorData = await response.json();
+                        alert(`Failed to leave ride: ${errorData.message}`);
+                        console.error('Failed to leave ride:', errorData);
+                    }
+                } catch (error) {
+                    alert('An error occurred while leaving the ride.');
+                    console.error('Error leaving ride:', error);
+                }
+            });
+        });
+    }
+
+    function openChatModal(ride) {
+        const isOwner = ride.owner === userName;
+        const isJoined = Array.isArray(ride.joined) && ride.joined.includes(userName);
+
+        if (!isOwner && !isJoined) {
+            alert("You must either be the ride owner or have joined this ride to chat.");
+            return;
+        }
+
+        document.getElementById('chatModal').style.display = 'flex';
+        document.getElementById('chatTitle').textContent = `Chat: ${ride.from} → ${ride.to} (${ride.date})`;
+        loadChatMessages(ride._id);
+
+        document.getElementById('chatForm').onsubmit = async function(e) {
+            e.preventDefault();
+            const input = document.getElementById('chatInput');
+            const msg = input.value.trim();
+            if (!msg) return;
+
+            // Send message to server
+            await fetch(`https://cabmate-backend.onrender.com/api/messages/${ride._id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user: userName, text: msg })
+            });
+
+            input.value = '';
+            loadChatMessages(ride._id);
+        };
+
+        document.getElementById('closeChat').onclick = function() {
+            document.getElementById('chatModal').style.display = 'none';
+        };
+    }
+
+    async function loadChatMessages(rideId) {
+        const res = await fetch(`https://cabmate-backend.onrender.com/api/messages/${rideId}`);
+        const messages = await res.json();
+        document.getElementById('chatMessages').innerHTML = messages.map(
+            m => `<div><b>${m.user}:</b> ${m.text} <span style="color:#aaa;font-size:0.85em;">${new Date(m.time).toLocaleTimeString()}</span></div>`
+        ).join('') || "<em>No messages yet.</em>";
+    }
+
+    async function handleRequest(rideId, regno, action) {
+        if (!['approve', 'reject'].includes(action)) return;
+
+        try {
+            const response = await fetch(`https://cabmate-backend.onrender.com/api/rides/${rideId}/handle-request`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ regno, action })
+            });
+
+            if (response.ok) {
+                alert(`Request ${action}d successfully!`);
+                const updatedRide = await response.json();
+                const yourRidesList = document.getElementById('yourRidesList');
+                if (yourRidesList) renderYourRides(await (await fetch(`https://cabmate-backend.onrender.com/api/rides/my?owner=${userName}`)).json());
+            } else {
+                const errorData = await response.json();
+                alert(`Failed to ${action} request: ${errorData.message}`);
+                console.error('Request handling error:', errorData);
+            }
+        } catch (error) {
+            alert('An error occurred while handling the request.');
+            console.error('Error handling request:', error);
+        }
+    }
+</script>
+
+</body>
+</html>

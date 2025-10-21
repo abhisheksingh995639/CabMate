@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - CabMate</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="container header-flex">
+            <h1>CabShare</h1>
+            <nav aria-label="Main navigation">
+                <ul class="nav-list">
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="login.html">Login</a></li>
+                </ul>
+            </nav>
+            <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </header>
+    <main>
+        <div class="login-container">
+            <h2>Create your CabShare account</h2>
+            <form id="signupForm" autocomplete="off">
+                <div class="form-group">
+                    <label for="name">Full Name</label>
+                    <input type="text" id="name" name="name" required autocomplete="name">
+                </div>
+                <div class="form-group">
+                    <label for="batch">Batch</label>
+                    <input type="text" id="batch" name="batch" required placeholder="e.g. 2022, 2023">
+                </div>
+                <div class="form-group">
+                    <label for="regno">Registration Number</label>
+                    <input type="text" id="regno" name="regno" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" name="email" required autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label for="confirm-password">Confirm Password</label>
+                    <input type="password" id="confirm-password" name="confirm-password" required autocomplete="new-password">
+                </div>
+                <button type="submit">Sign Up</button>
+            </form>
+            <div style="margin-top:14px; text-align:center;">
+                <span style="color:var(--text-light);font-size:0.97rem;">Already have an account?</span>
+                <a href="login.html" style="color:var(--accent);font-size:1rem;font-weight:600;text-decoration:underline; margin-left:4px;">Login</a>
+            </div>
+        </div>
+    </main>
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 CabMate. All rights reserved.</p>
+        </div>
+    </footer>
+    <script src="script.js"></script>
+    </body>
+</html>
